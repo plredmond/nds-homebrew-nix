@@ -1,0 +1,3 @@
+[submodule "nds-examples"]
+	path = nds-examples
+	url = https://github.com/devkitPro/nds-examples.git
