@@ -30,6 +30,7 @@
           export DEVKITPRO=${devkitARM}
           export DEVKITARM=${devkitARM}/devkitARM
           export LIBC=${libc}
+          export PATH=$PATH:$DEVKITPRO/tools/bin:$DEVKITARM/bin
         '';
       };
     });
