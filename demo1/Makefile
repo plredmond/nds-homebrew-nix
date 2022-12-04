@@ -16,9 +16,9 @@ GAME_ICON :=
 NITRO_FILES :=
 
 # These set the information text in the nds file
-#GAME_TITLE     := My Wonderful Homebrew
-#GAME_SUBTITLE1 := built with devkitARM
-#GAME_SUBTITLE2 := http://devitpro.org
+GAME_TITLE     := demo1 NDS downlink
+GAME_SUBTITLE1 := Downloads a file from a url.
+GAME_SUBTITLE2 := Saves the trouble of swapping sd cards.
 
 include $(DEVKITARM)/ds_rules
 

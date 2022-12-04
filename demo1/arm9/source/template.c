@@ -22,7 +22,6 @@ const size_t downloadBufferSize = 4096;
 
 enum STATE {
     INIT,
-    CHECK_EMU,
     CONNECT_WIFI,
     ADDR_INPUT,
     CONNECT,
@@ -36,7 +35,7 @@ void deinit() {
     if (INIT < state) {
         char label[32] = {0}; // FIXME buffer overflow?
         fatGetVolumeLabel(fatName, label);
-        printf("Unmounting fat with label: %s\n", label);
+        printf("Unmounting fat: %s\n", label);
         fatUnmount(fatName);
         fatGetVolumeLabel(fatName, label);
         printf(WHT "\t fat now has label: %s\n" RESET, label);
@@ -44,40 +43,22 @@ void deinit() {
 }
 
 void chattyShutdown() {
-    iprintf(YEL "Shut down\n" RESET);
+    iprintf(CYN "Goodbye\n" RESET);
     swiWaitForVBlank();
     systemShutDown();
 }
 
 void errorShutdown(char *msg) {
+    iprintf(YEL);
     switch (state) {
-        case INIT:
-            printf("Error starting up:\n");
-            break;
-        case CHECK_EMU:
-            printf("Error emulator status:\n");
-            break;
-        case CONNECT_WIFI:
-            printf("Error connecting to wifi:\n");
-            break;
-        case ADDR_INPUT:
-            printf("Error reading address:\n");
-            break;
-        case CONNECT:
-            printf("Error connecting to server:\n");
-            break;
-        case REQUEST:
-            printf("Error sending request:\n");
-            break;
-        case DOWNLOAD:
-            printf("Error receiving response:\n");
-            break;
-        case DEINIT:
-            printf("Error wrapping up:\n");
-            break;
-        default:
-            printf("Error in state %d", state);
-            break;
+        case INIT:         printf("Error starting up:\n");          break;
+        case CONNECT_WIFI: printf("Error connecting to wifi:\n");   break;
+        case ADDR_INPUT:   printf("Error reading address:\n");      break;
+        case CONNECT:      printf("Error connecting to server:\n"); break;
+        case REQUEST:      printf("Error sending request:\n");      break;
+        case DOWNLOAD:     printf("Error receiving response:\n");   break;
+        case DEINIT:       printf("Error wrapping up:\n");          break;
+        default:           printf("Error in state %d", state);      break;
     }
     iprintf(RED);
     iprintf("%s\n", msg);
