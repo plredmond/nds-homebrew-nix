@@ -16,6 +16,10 @@
 #define WHT   "\x1B[37m"
 #define RESET "\x1B[39m"
 
+const char *fatName = "fat:";
+const char *fileName = "testprogram.nds";
+const size_t downloadBufferSize = 4096;
+
 enum STATE {
     INIT,
     CHECK_EMU,
@@ -27,6 +31,17 @@ enum STATE {
     DEINIT,
 };
 enum STATE state = INIT;
+
+void deinit() {
+    if (INIT < state) {
+        char label[32] = {0}; // FIXME buffer overflow?
+        fatGetVolumeLabel(fatName, label);
+        printf("Unmounting fat with label: %s\n", label);
+        fatUnmount(fatName);
+        fatGetVolumeLabel(fatName, label);
+        printf(WHT "\t fat now has label: %s\n" RESET, label);
+    }
+}
 
 void chattyShutdown() {
     iprintf(YEL "Shut down\n" RESET);
@@ -64,13 +79,12 @@ void errorShutdown(char *msg) {
             printf("Error in state %d", state);
             break;
     }
-    {
-        iprintf(RED);
-        iprintf("%s\n", msg);
-        perror("perror");
-        iprintf(RESET);
-    }
-    iprintf(WHT "Press start to shut down\n" RESET);
+    iprintf(RED);
+    iprintf("%s\n", msg);
+    perror("perror");
+    iprintf(RESET);
+    deinit();
+    iprintf(GRN "Press start to shut down\n" RESET);
     while(1) {
         swiWaitForVBlank();
         scanKeys();
@@ -79,22 +93,39 @@ void errorShutdown(char *msg) {
 }
 
 int main() {
-    defaultExceptionHandler();
     consoleDemoInit();
-    keyboardDemoInit();
+
+    const s16 emulatorName[10] = {'D','e','S','m','u','M','E'};
+    const bool inEmulator = ! memcmp(emulatorName, PersonalData->name,
+            PersonalData->nameLen < 10 ? PersonalData->nameLen : 10);
+    if (inEmulator) iprintf("!! Running in emulator !!\n");
+
+    iprintf("Install exception handler...\n");
+    defaultExceptionHandler();
+
+    iprintf("Load keyboard demo...\n");
+    Keyboard *keyboard = keyboardDemoInit();
+    if (NULL == keyboard) {
+        errorShutdown("Couldn't set up keyboard");
+    }
+
+    iprintf("Mount fat partition...\n");
+    if ( ! inEmulator) {
+        if ( ! fatInitDefault()) {
+            errorShutdown("Couldn't access storage");
+        }
+    }
+
     iprintf(GRN "Start\n" RESET);
 
 
-    state = CHECK_EMU;
-    const s16 emulatorName[10] = {'D','e','S','m','u','M','E'};
-    const bool inEmulator = !memcmp(emulatorName, PersonalData->name,
-            PersonalData->nameLen < 10 ? PersonalData->nameLen : 10);
-    if (inEmulator) iprintf("Running in emulator\n");
 
 
     state = CONNECT_WIFI;
-    if (!Wifi_InitDefault(WFC_CONNECT) && !inEmulator) {
-        errorShutdown("Couldn't connect to wifi");
+    if ( ! inEmulator) {
+        if ( ! Wifi_InitDefault(WFC_CONNECT)) {
+            errorShutdown("Couldn't connect to wifi");
+        }
     }
     {
         iprintf("Connected to wifi\n");
@@ -137,8 +168,10 @@ int main() {
         iprintf("Connecting to server...\n");
         iprintf(WHT "\taddr   : %s\n" RESET, inet_ntoa(addr.sin_addr));
         iprintf(WHT "\tport   : %hd\n" RESET, ntohs(addr.sin_port));
-        if (-1 == connect(sock, (struct sockaddr *) &addr, sizeof(addr))) {
-            errorShutdown("Couldn't connect");
+        if ( ! inEmulator ) {
+            if (-1 == connect(sock, (struct sockaddr *) &addr, sizeof(addr))) {
+                errorShutdown("Couldn't connect");
+            }
         }
         iprintf(GRN "Connected\n" RESET);
     }
@@ -147,7 +180,8 @@ int main() {
     state = REQUEST;
     {
         iprintf("Making request...\n");
-        char *request = "GET /testprogram.nds HTTP/1.1\n\n";
+        char request[128]; // FIXME buffer overflow?
+        sprintf(request, "GET /%s HTTP/1.1\n\n", fileName);
         ssize_t sent = send(sock, request, strlen(request), 0);
         if (-1 == sent) {
             errorShutdown("Couldn't send request");
@@ -159,14 +193,39 @@ int main() {
 
 
     state = DOWNLOAD;
-    // TODO: download stuff
-    // TODO: write to fat
-
-    state = DEINIT;
-    if (-1 == close(sock)) {
-        errorShutdown("Couldn't close socket"); // TODO: reduce to a warning
+    {
+        FILE *file = fopen(fileName, "wb");
+        if (NULL == file) {
+            errorShutdown("Unable to create download file");
+        }
+        ssize_t recvd;
+        char buffer[downloadBufferSize];
+        iprintf("Downloading\n");
+        do {
+            recvd = recv(sock, buffer, downloadBufferSize, 0);
+            if (-1 == recvd) {
+                if (0 != fclose(file)) perror("perror Warning closing file");
+                errorShutdown("Couldn't receive");
+            }
+            iprintf(".");
+            if (downloadBufferSize != fwrite(buffer, sizeof(char), recvd, file)) {
+                if (0 != fclose(file)) perror("perror Warning closing file");
+                errorShutdown("Couldn't write file");
+            }
+            fflush(stdout);
+        } while (0 < recvd);
+        iprintf("\nDone receiving\n");
+        if (-1 == close(sock)) perror("perror Warning closing socket");
+        iprintf("\nSocket closed\n");
+        if (0 != fclose(file)) perror("perror Warning closing file");
+        iprintf(GRN "\nFile closed\n" RESET);
     }
 
+
+    state = DEINIT;
+    iprintf("Cleaning up...");
+    deinit();
+    iprintf(GRN "Press start to shut down\n" RESET);
     while(1) {
         swiWaitForVBlank();
         scanKeys();
