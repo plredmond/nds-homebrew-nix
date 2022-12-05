@@ -181,7 +181,9 @@ int main() {
         }
         ssize_t recvd;
         char buffer[downloadBufferSize];
-        iprintf("Downloading\n");
+        iprintf("Receiving\n");
+        // FIXME: parse, make sure it's a 200, look for the newlines .. then
+        // start writing the file
         do {
             recvd = recv(sock, buffer, downloadBufferSize, 0);
             if (-1 == recvd) {
@@ -189,7 +191,7 @@ int main() {
                 errorShutdown("Couldn't receive");
             }
             iprintf(".");
-            if (downloadBufferSize != fwrite(buffer, sizeof(char), recvd, file)) {
+            if (recvd != fwrite(buffer, sizeof(char), recvd, file)) {
                 if (0 != fclose(file)) perror("perror Warning closing file");
                 errorShutdown("Couldn't write file");
             }
