@@ -48,7 +48,7 @@ void chattyShutdown() {
     systemShutDown();
 }
 
-void errorShutdown(char *msg) {
+void errorShutdown(bool do_perror, char *msg) {
     iprintf(YEL);
     switch (state) {
         case INIT:         printf("Error starting up:\n");          break;
@@ -62,7 +62,7 @@ void errorShutdown(char *msg) {
     }
     iprintf(RED);
     iprintf("%s\n", msg);
-    perror("perror");
+    if (do_perror) perror("perror");
     iprintf(RESET);
     deinit();
     iprintf(GRN "Press start to shut down\n" RESET);
@@ -87,13 +87,13 @@ int main() {
     iprintf("Load keyboard demo...\n");
     Keyboard *keyboard = keyboardDemoInit();
     if (NULL == keyboard) {
-        errorShutdown("Couldn't set up keyboard");
+        errorShutdown(true, "Couldn't set up keyboard");
     }
 
     iprintf("Mount fat partition...\n");
     if ( ! inEmulator) {
         if ( ! fatInitDefault()) {
-            errorShutdown("Couldn't access storage");
+            errorShutdown(true, "Couldn't access storage");
         }
     }
 
@@ -105,7 +105,7 @@ int main() {
     state = CONNECT_WIFI;
     if ( ! inEmulator) {
         if ( ! Wifi_InitDefault(WFC_CONNECT)) {
-            errorShutdown("Couldn't connect to wifi");
+            errorShutdown(true, "Couldn't connect to wifi");
         }
     }
     {
@@ -134,12 +134,12 @@ int main() {
     state = CONNECT;
     int sock = socket(AF_INET, SOCK_STREAM, 0);
     if (-1 == sock) {
-        errorShutdown("Couldn't make a socket");
+        errorShutdown(true, "Couldn't make a socket");
     }
     {
         unsigned long ip = inet_addr(target_ip);
         if (INADDR_NONE == ip) {
-            errorShutdown("Couldn't convert string to address");
+            errorShutdown(true, "Couldn't convert string to address");
         }
         struct sockaddr_in addr = (struct sockaddr_in){
             .sin_family = AF_INET,
@@ -151,7 +151,7 @@ int main() {
         iprintf(WHT "\tport   : %hd\n" RESET, ntohs(addr.sin_port));
         if ( ! inEmulator ) {
             if (-1 == connect(sock, (struct sockaddr *) &addr, sizeof(addr))) {
-                errorShutdown("Couldn't connect");
+                errorShutdown(true, "Couldn't connect");
             }
         }
         iprintf(GRN "Connected\n" RESET);
@@ -165,9 +165,9 @@ int main() {
         sprintf(request, "GET /%s HTTP/1.1\n\n", fileName);
         ssize_t sent = send(sock, request, strlen(request), 0);
         if (-1 == sent) {
-            errorShutdown("Couldn't send request");
+            errorShutdown(true, "Couldn't send request");
         } else if (strlen(request) != sent) {
-            errorShutdown("Sent wrong number of bytes");
+            errorShutdown(true, "Sent wrong number of bytes");
         }
         iprintf(GRN "Request sent\n" RESET);
     }
@@ -177,7 +177,7 @@ int main() {
     {
         FILE *file = fopen(fileName, "wb");
         if (NULL == file) {
-            errorShutdown("Unable to create download file");
+            errorShutdown(true, "Unable to create download file");
         }
         ssize_t recvd;
         char buffer[downloadBufferSize];
@@ -188,12 +188,12 @@ int main() {
             recvd = recv(sock, buffer, downloadBufferSize, 0);
             if (-1 == recvd) {
                 if (0 != fclose(file)) perror("perror Warning closing file");
-                errorShutdown("Couldn't receive");
+                errorShutdown(true, "Couldn't receive");
             }
             iprintf(".");
             if (recvd != fwrite(buffer, sizeof(char), recvd, file)) {
                 if (0 != fclose(file)) perror("perror Warning closing file");
-                errorShutdown("Couldn't write file");
+                errorShutdown(true, "Couldn't write file");
             }
             fflush(stdout);
         } while (0 < recvd);
